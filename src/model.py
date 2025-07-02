@@ -12,7 +12,7 @@ import pandas as pd
 import pulp
 from tqdm import tqdm
 
-from .kinship import make_inbreeding_fn, build_feasible_pairs
+from .kinship import build_feasible_pairs, build_additive_matrix
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 LOGGER = logging.getLogger(__name__)
@@ -35,16 +35,12 @@ def assign_pairs(
     LOGGER.info("📦  Loading data …")
     bulls, cows, pedigree = _load_data(data_dir)
 
-    LOGGER.info("🔍  Preparing kinship cache …")
-    ped_dict = (
-        pedigree.set_index("id")[["mother_id", "father_id"]]
-        .apply(lambda r: (r.mother_id, r.father_id), axis=1)
-        .to_dict()
-    )
-    _, R_fn = make_inbreeding_fn(ped_dict)
+    LOGGER.info("🔍  Building additive kinship matrix …")
+    ids = list(bulls["id"]) + list(cows["id"])
+    A_mat = build_additive_matrix(pedigree, ids)
 
     LOGGER.info("🔍  Building feasible (bull, cow) pairs …")
-    pairs = build_feasible_pairs(bulls, cows, R_fn, r_threshold)
+    pairs = build_feasible_pairs(bulls, cows, r_threshold=r_threshold, A_mat=A_mat)
 
     if solver == "greedy":
         return _solve_greedy(pairs, bulls, cows, bull_quota_frac)

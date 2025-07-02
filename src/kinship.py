@@ -140,12 +140,10 @@ def build_feasible_pairs(
     ebv_cows = cows["ebv"].to_numpy(dtype=np.float64)
 
     # матрица родства bulls × cows
-    kinship_mat = np.zeros((bull_ids.shape[0], cow_ids.shape[0]), dtype=np.float32)
     if A_mat is not None:
-        for j, bid in enumerate(bull_ids):
-            for i, cid in enumerate(cow_ids):
-                kinship_mat[j, i] = A_mat.loc[bid, cid]
+        kinship_mat = A_mat.loc[bull_ids, cow_ids].to_numpy(dtype=np.float32)
     else:
+        kinship_mat = np.zeros((bull_ids.shape[0], cow_ids.shape[0]), dtype=np.float32)
         assert R_fn is not None, "Either R_fn or A_mat must be provided"
         for j, bid in enumerate(bull_ids):
             for i, cid in enumerate(cow_ids):
