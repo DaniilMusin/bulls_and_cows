@@ -2,12 +2,15 @@
 Инбридинг (F) и коэффициент родства (R) по Райту, 1922.
 
 R(a,b) = 2 · f(a,b), где f – коэффициент коанцестри.
-Алгоритм рекурсивный с мемоизацией + numba‑ускоренная фильтрация
-допустимых пар bulls × cows.
+Есть два подхода:
+* рекурсивный расчёт f(a,b) с мемоизацией;
+* табличный метод построения полной аддитивной матрицы родства A.
+Функция ``build_additive_matrix`` реализует второй вариант и может
+использоваться для более быстрого построения допустимых пар bulls × cows.
 """
 from __future__ import annotations
 from functools import lru_cache
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Iterable
 
 import numpy as np
 import pandas as pd
@@ -57,6 +60,48 @@ def make_inbreeding_fn(ped_dict: PedigreeType):
     return F, R
 
 
+def build_additive_matrix(pedigree: pd.DataFrame, ids: Iterable[str] | None = None) -> pd.DataFrame:
+    """Возвращает аддитивную матрицу родства A для заданных животных.
+
+    Если ``ids`` не указан, используется порядок из ``pedigree``.
+    ``pedigree`` должен содержать записи для всех родителей.
+    """
+    if ids is None:
+        ids = pedigree["id"].tolist()
+    else:
+        ids = list(ids)
+    idx = {a: i for i, a in enumerate(ids)}
+    n = len(ids)
+    A = np.zeros((n, n), dtype=np.float64)
+
+    for i, aid in enumerate(ids):
+        row = pedigree[pedigree["id"] == aid]
+        if row.empty:
+            mother = father = None
+        else:
+            mother = row.iloc[0]["mother_id"]
+            father = row.iloc[0]["father_id"]
+        mi = idx.get(mother)
+        fi = idx.get(father)
+
+        if mi is None and fi is None:
+            A[i, i] = 1.0
+        elif mi is None or fi is None:
+            parent = mi if mi is not None else fi
+            A[i, i] = 1.0
+            if parent is not None:
+                for j in range(i):
+                    A[i, j] = 0.5 * A[parent, j]
+                    A[j, i] = A[i, j]
+        else:
+            for j in range(i):
+                A[i, j] = 0.5 * (A[mi, j] + A[fi, j])
+                A[j, i] = A[i, j]
+            A[i, i] = 1.0 + 0.5 * A[mi, fi]
+
+    return pd.DataFrame(A, index=ids, columns=ids)
+
+
 @njit(cache=True)
 def _filter_pairs_numba(
     kinship_mat: np.ndarray,
@@ -84,8 +129,9 @@ def _filter_pairs_numba(
 def build_feasible_pairs(
     bulls: pd.DataFrame,
     cows: pd.DataFrame,
-    R_fn,
+    R_fn=None,
     r_threshold: float = 0.05,
+    A_mat: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Формирует таблицу допустимых пар (cow_id, bull_id, ebv_child)."""
     bull_ids = bulls["id"].to_numpy(dtype=str)
@@ -95,9 +141,15 @@ def build_feasible_pairs(
 
     # матрица родства bulls × cows
     kinship_mat = np.zeros((bull_ids.shape[0], cow_ids.shape[0]), dtype=np.float32)
-    for j, bid in enumerate(bull_ids):
-        for i, cid in enumerate(cow_ids):
-            kinship_mat[j, i] = R_fn(bid, cid)
+    if A_mat is not None:
+        for j, bid in enumerate(bull_ids):
+            for i, cid in enumerate(cow_ids):
+                kinship_mat[j, i] = A_mat.loc[bid, cid]
+    else:
+        assert R_fn is not None, "Either R_fn or A_mat must be provided"
+        for j, bid in enumerate(bull_ids):
+            for i, cid in enumerate(cow_ids):
+                kinship_mat[j, i] = R_fn(bid, cid)
 
     cow_idx, bull_idx, ebv_child = _filter_pairs_numba(
         kinship_mat, ebv_bulls, ebv_cows, r_threshold
