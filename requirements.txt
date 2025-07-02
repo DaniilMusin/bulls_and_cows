@@ -1,0 +1,7 @@
+pandas>=2.2
+numpy>=1.26
+numba>=0.59
+pulp>=2.8            # включает CBC‑решатель
+
+tqdm>=4.66
+pytest>=8.2
