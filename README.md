@@ -7,6 +7,7 @@
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+sudo apt-get install coinor-cbc  # для MILP-решателя
 
 # bulls.csv, cows.csv, pedigree.csv → ./data
 python -m src.main --data_dir data --solver greedy           # 10‑15 s
