@@ -71,11 +71,12 @@ def _solve_greedy(
     # dict cow → [(bull, ebv_child)…]  (сорт EBV desc)
     pairs_sorted = (
         pairs.sort_values("ebv_child", ascending=False)
-        .groupby("cow_id")
+        .groupby("cow_id", group_keys=False)
         .apply(
             lambda df: list(
                 df[["bull_id", "ebv_child"]].itertuples(index=False, name=None)
-            )
+            ),
+            include_groups=False
         )
         .to_dict()
     )
