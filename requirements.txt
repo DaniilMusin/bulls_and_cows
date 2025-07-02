@@ -1,7 +1,6 @@
 pandas>=2.2
 numpy>=1.26
 numba>=0.59
-pulp>=2.8            # включает CBC‑решатель
-
+pulp[cbc]>=2.8     # ← extra гарантирует попытку поставить wheel с cbc
 tqdm>=4.66
 pytest>=8.2
